@@ -1,11 +1,17 @@
 import asyncio
+from contextlib import asynccontextmanager
 import datetime
+import os
+import time
+import secrets
 
+from fastapi import status
+from fastapi.params import Depends
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, registry
 from sqlalchemy import Column, Integer, String, select
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -16,12 +22,107 @@ engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI()
+
+_ADMIN_KEY = None
+
+def get_admin_key():
+    global _ADMIN_KEY
+    if _ADMIN_KEY is None:
+        _ADMIN_KEY = secrets.token_urlsafe(32)
+    return _ADMIN_KEY
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    
+    print("\n" + "="*40, flush=True)
+    print(f"DATABASE: Tables verified/created.", flush=True)
+    print(f"ADMIN KEY: {get_admin_key()}", flush=True)
+    print("="*40 + "\n", flush=True)
+    
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+
 mapper_registry = registry()
 Base = mapper_registry.generate_base()
 
 engine = create_async_engine(DATABASE_URL, echo=True)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+soft_banned_ips = {}
+BAN_DURATION = 60 * 60 * 24
+
+def check_banned_status(request: Request):
+    client_ip = request.client.host
+    if client_ip in soft_banned_ips:
+        # Check if the ban has expired
+        if time.time() < soft_banned_ips[client_ip]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied due to previous unauthorized attempts."
+            )
+        else:
+            # Ban expired, clean up
+            del soft_banned_ips[client_ip]
+
+@app.get("/admin/panel", dependencies=[Depends(check_banned_status)], include_in_schema=False) 
+async def admin_panel(
+    request: Request, 
+    action: str = None,
+    key: str = None, 
+    entry_id: int = None, 
+    name: str = None, 
+    message: str = None, 
+    stars: int = None, 
+    ):
+    
+    client_ip = request.client.host
+
+    print(f"Admin panel access attempt from IP: {client_ip} with action: {action}")
+    print(f"received key: {key}")
+    
+    if key.strip() != get_admin_key().strip():
+        # trigger soft ban for the offending IP
+        soft_banned_ips[client_ip] = time.time() + BAN_DURATION
+        print(f"!!! ALERT: Soft-banning IP {client_ip} for invalid key.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+    if action == "delete" and entry_id is not None:
+        async with AsyncSessionLocal() as q:
+            session: AsyncSession = q
+            statement = select(Guestbook).where(Guestbook.id == entry_id)
+            result = await session.execute(statement)
+            entry = result.scalar_one_or_none()
+            if entry is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
+            await session.delete(entry)
+            await session.commit()
+            return {"message": "Entry deleted"}
+
+    elif action == "update" and entry_id is not None:
+        async with AsyncSessionLocal() as q:
+            session: AsyncSession = q
+            statement = select(Guestbook).where(Guestbook.id == entry_id)
+            result = await session.execute(statement)
+            entry = result.scalar_one_or_none()
+            if entry is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
+            if name is not None:
+                entry.name = name.strip()
+            if message is not None:
+                entry.message = message.strip()
+            if stars is not None:
+                entry.stars = stars
+            await session.commit()
+            await session.refresh(entry)
+            return {"message": "Entry updated"}
+
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid action or missing parameters")
 
 
 class Guestbook(Base):
@@ -106,18 +207,9 @@ async def api_add_star(request: Request, entry_id: int):
     return await add_star(entry_id)
 
 
-async def async_main():
-    async with engine.begin() as conn:
-        # This actually creates the tables defined in your Base
-        await conn.run_sync(Base.metadata.create_all)
-    print("Database tables created.")
-
-
 if __name__ == "__main__":
     import uvicorn
 
-    asyncio.run(async_main())
-
     uvicorn.run(
-        "main:app", host="0.0.0.0", port=2004, loop="asyncio", log_level="info"
+        "main:app", host="0.0.0.0", port=2004, log_level="info"
     )
