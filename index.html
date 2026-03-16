@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta property="og:title" content="guestbook">
+    <meta property="og:description" content="i made this at 3am pls sign it means a lot to me :')">
+    <meta property="og:site_name" content="guestbook">
+    <meta property="og:image" content="https://arda0.net/assets/xp.gif">
+    <meta property="og:url" content="https://arda0.net/guestbook/">
+
+    <title>guestbook</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+        }
+
+        body {
+            background: #0f172a;
+            color: #f8fafc;
+        }
+    </style>
+</head>
+
+<header class="w-full max-w-2xl mx-auto px-4 py-8 flex justify-between items-end">
+    <div class="flex flex-col gap-1">
+        <a href="https://arda0.net" target="_self"
+            class="text-[10px] font-bold text-blue-400 hover:text-blue-300 transition-colors tracking-[0.2em] uppercase flex items-center gap-2">
+            <span>←</span> back to home
+        </a>
+        <h1 class="text-3xl font-black text-white tracking-tight">
+            guest<span class="text-blue-500">book</span>
+        </h1>
+    </div>
+</header>
+
+<div class="max-w-2xl mx-auto px-4 mb-8">
+    <div class="h-[1px] w-full bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
+</div>
+
+<main class="flex flex-col gap-6 max-w-2xl mx-auto">
+    <h2 class="text-[10px] font-bold text-slate-500 tracking-[0.2em] px-2 uppercase">guestbook</h2>
+
+    <div class="glass-panel p-6 rounded-xl border border-slate-800 bg-slate-900/40">
+        <form id="guestbook-form" class="flex flex-col gap-4">
+            <input type="text" id="name-input" placeholder="your name" required
+                class="bg-slate-800/50 border border-slate-700 text-blue-100 text-xs rounded p-2 px-3 focus:outline-none focus:border-blue-500 transition">
+            <textarea id="message-input" placeholder="leave a message..." required
+                class="bg-slate-800/50 border border-slate-700 text-blue-100 text-xs rounded p-2 px-3 h-20 focus:outline-none focus:border-blue-500 transition"></textarea>
+            <button type="submit"
+                class="bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold py-2 rounded uppercase tracking-wider transition">
+                sign guestbook
+            </button>
+        </form>
+    </div>
+
+    <div id="guestbook-feed" class="flex flex-col gap-4">
+    </div>
+
+    <div class="flex justify-between px-2">
+        <button id="prev-btn"
+            class="text-slate-500 text-[10px] font-bold uppercase tracking-widest disabled:opacity-30">← newer</button>
+        <button id="next-btn"
+            class="text-slate-500 text-[10px] font-bold uppercase tracking-widest disabled:opacity-30">older →</button>
+    </div>
+</main>
+
+<script>
+    // --- Configuration ---
+    const CONFIG = {
+        API_BASE: "https://arda0.net/guestbook/",
+        PAGE_LIMIT: 10
+    };
+
+    let currentIndex = 0;
+
+    // --- State & DOM ---
+    const feed = document.getElementById('guestbook-feed');
+    const form = document.getElementById('guestbook-form');
+
+    // --- Core Functions ---
+    async function fetchEntries() {
+        try {
+            const res = await fetch(`${CONFIG.API_BASE}/get/entry?index=${currentIndex}&limit=${CONFIG.PAGE_LIMIT}`);
+            const data = await res.json();
+            renderEntries(data);
+
+            // Toggle pagination buttons
+            document.getElementById('prev-btn').disabled = currentIndex === 0;
+            document.getElementById('next-btn').disabled = data.length < CONFIG.PAGE_LIMIT;
+        } catch (err) {
+            alert("Failed to load entries. Rate limited?");
+        }
+    }
+
+    function renderEntries(entries) {
+        feed.innerHTML = entries.map(entry => `
+            <div class="glass-panel p-6 rounded-xl border border-slate-800 bg-slate-900/20 transition-all hover:bg-slate-900/30">
+                <div class="flex justify-between items-center">
+                    <span class="text-blue-300 font-bold text-sm">${entry.name}</span>
+                    <span class="text-[9px] text-slate-500 font-mono">${new Date(entry.time).toLocaleString()}</span>
+                </div>
+                <p class="text-slate-400 text-xs mt-2 italic leading-relaxed">"${entry.message}"</p>
+                <div class="mt-4 flex justify-end">
+                    <button onclick="starEntry(${entry.id}, this)" 
+                        class="flex items-center gap-1.5 text-slate-500 hover:text-yellow-400 transition-colors group">
+                        <span class="text-[10px] font-bold group-hover:scale-110 transition-transform">★</span>
+                        <span class="text-[10px] font-mono count">${entry.stars}</span>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function starEntry(id, btn) {
+        const countSpan = btn.querySelector('.count');
+        const currentCount = parseInt(countSpan.innerText);
+
+        try {
+            // Optimistic UI update
+            countSpan.innerText = currentCount + 1;
+            btn.classList.add('text-yellow-400');
+
+            const res = await fetch(`${CONFIG.API_BASE}/post/star?entry_id=${id}`, { method: 'POST' });
+            if (!res.ok) throw new Error();
+        } catch (err) {
+            // Revert on failure
+            countSpan.innerText = currentCount;
+            btn.classList.remove('text-yellow-400');
+            alert("Action failed. You might be rate-limited!");
+        }
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('name-input').value;
+        const message = document.getElementById('message-input').value;
+
+        try {
+            const res = await fetch(`${CONFIG.API_BASE}/post/entry?name=${encodeURIComponent(name)}&message=${encodeURIComponent(message)}`, {
+                method: 'POST'
+            });
+
+            if (res.ok) {
+                window.location.reload(); // Refresh as requested
+            } else {
+                throw new Error();
+            }
+        } catch (err) {
+            alert("Could not post message. Please wait a bit before trying again.");
+        }
+    });
+
+    // Pagination Listeners
+    document.getElementById('next-btn').onclick = () => { currentIndex += CONFIG.PAGE_LIMIT; fetchEntries(); };
+    document.getElementById('prev-btn').onclick = () => { currentIndex = Math.max(0, currentIndex - CONFIG.PAGE_LIMIT); fetchEntries(); };
+
+    // Init
+    fetchEntries();
+</script>

@@ -1,0 +1,10 @@
+# all values can be changed to your liking, provided you know what you are doing
+services:
+  guestbook:
+    build: .
+    container_name: guestbook
+    restart: always
+    ports:
+      - "2004:2004"
+    volumes:
+      - /app/guestbook/:/app/mountpoint/
