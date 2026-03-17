@@ -171,7 +171,8 @@ async def get_entries(index: int = 0, limit: int = 10):
     async with AsyncSessionLocal() as q:
         session: AsyncSession = q
 
-        statement = select(Guestbook).offset(index).limit(limit)
+        # get 10 newest entries starting from index
+        statement = select(Guestbook).order_by(Guestbook.id.desc()).offset(index).limit(limit)
         result = await session.execute(statement)
 
         return result.scalars().all()
