@@ -1,7 +1,5 @@
-import asyncio
 from contextlib import asynccontextmanager
 import datetime
-import os
 import time
 import secrets
 
@@ -14,14 +12,16 @@ from sqlalchemy import Column, Integer, String, select
 from fastapi import FastAPI, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+import uvicorn
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 # The 'sqlite+aiosqlite' driver is key for async SQLite
 DATABASE_URL = "sqlite+aiosqlite:///./mountpoint/guestbook.db"
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-limiter = Limiter(key_func=get_remote_address)
 
+limiter = Limiter(key_func=get_remote_address)
 
 _ADMIN_KEY = None
 
@@ -32,7 +32,7 @@ def get_admin_key():
     return _ADMIN_KEY
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI): # ignore: unused-argument
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
@@ -45,6 +45,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["127.0.0.1", "172.22.0.1"])
 
 mapper_registry = registry()
 Base = mapper_registry.generate_base()
@@ -69,8 +70,8 @@ def check_banned_status(request: Request):
             # Ban expired, clean up
             del soft_banned_ips[client_ip]
 
-@app.get("/admin/panel", dependencies=[Depends(check_banned_status)], include_in_schema=False) 
-async def admin_panel(
+@app.get("/admin", dependencies=[Depends(check_banned_status)], include_in_schema=False) 
+async def edit_entry(
     request: Request, 
     action: str = None,
     key: str = None, 
@@ -141,7 +142,7 @@ async def root():
 @app.get("/root")
 @limiter.limit("5/minute")
 async def api_read_root(request: Request):
-    return get_remote_address(request)
+    return request.client.host
 
 
 async def post_entry(name: str, message: str):
@@ -208,8 +209,7 @@ async def api_add_star(request: Request, entry_id: int):
 
 
 if __name__ == "__main__":
-    import uvicorn
-
+    
     uvicorn.run(
         "main:app", host="0.0.0.0", port=2004, log_level="info"
     )
