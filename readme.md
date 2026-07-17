@@ -1,6 +1,10 @@
 guestbook api + frontend written in 3am
 
-you'll need docker to run it
+features:
+- rate limits of 2 entries per day, and 3 likes per day
+- low effort sql database so you can actually preserve the entries
+
+you won't need docker to run it, but i recommend doing so
 
 for shorthand i've already added restart, stop and start scripts to root directory.
 
