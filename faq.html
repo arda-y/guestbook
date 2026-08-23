@@ -50,16 +50,21 @@
             <div class="h-1 w-12 bg-blue-500 mx-auto rounded-full"></div>
         </header>
 
-        <div class="glass-panel p-6 rounded-2xl shadow-2xl border border-slate-800 bg-slate-900/40 space-y-2">
-            <h3 class="text-[10px] font-bold text-blue-400 uppercase tracking-widest">How long is my entry kept?</h3>
-            <p class="text-slate-300 text-sm leading-relaxed">
-                guestbook entries are not deleted automatically. Your entry stays until an admin removes it.
-            </p>
-        </div>
+        <div id="faq-list" class="space-y-4"></div>
+    </div>
+</main>
 
-        <div class="glass-panel p-6 rounded-2xl shadow-2xl border border-slate-800 bg-slate-900/40 space-y-2">
-            <h3 class="text-[10px] font-bold text-blue-400 uppercase tracking-widest">What are the limits?</h3>
-            <p class="text-slate-300 text-sm leading-relaxed">
+<script>
+    const faqs = [
+        {
+            q: 'How long is my entry kept?',
+            a: `<p class="text-slate-300 text-sm leading-relaxed">
+                guestbook entries are not deleted automatically. Your entry stays until an admin removes it.
+            </p>`,
+        },
+        {
+            q: 'What are the limits?',
+            a: `<p class="text-slate-300 text-sm leading-relaxed">
                 Your name can be at most 100 characters. Your message can be at most 500 characters. The form
                 shows how many characters you have left as you type.
             </p>
@@ -67,30 +72,50 @@
                 Per IP address, guestbook also limits how often you can act: 2 new entries per day, 3 stars per
                 day, and 15 reads per minute. If you go over a limit, guestbook rejects the request with an
                 error. Wait for the limit to reset, then try again.
-            </p>
-        </div>
-
-        <div class="glass-panel p-6 rounded-2xl shadow-2xl border border-slate-800 bg-slate-900/40 space-y-2">
-            <h3 class="text-[10px] font-bold text-blue-400 uppercase tracking-widest">What data does guestbook collect?</h3>
-            <p class="text-slate-300 text-sm leading-relaxed">
+            </p>`,
+        },
+        {
+            q: 'What data does guestbook collect?',
+            a: `<p class="text-slate-300 text-sm leading-relaxed">
                 guestbook uses your IP address only to enforce the limits above. guestbook does not require an
                 account. guestbook does not collect your email. guestbook does not link your IP address to a
                 profile.
             </p>
             <p class="text-slate-300 text-sm leading-relaxed">
+                guestbook does not keep your IP address forever. Once its cooldown passes, guestbook removes it.
+                guestbook never links your IP address to your posted entry, so there is no way to tie an entry
+                back to the person who posted it.
+            </p>
+            <p class="text-slate-300 text-sm leading-relaxed">
                 Your name and message are public. Anyone can read them. Do not post information you want to
                 keep private.
-            </p>
-        </div>
-
-        <div class="glass-panel p-6 rounded-2xl shadow-2xl border border-slate-800 bg-slate-900/40 space-y-2">
-            <h3 class="text-[10px] font-bold text-blue-400 uppercase tracking-widest">How do I report abuse?</h3>
-            <p class="text-slate-300 text-sm leading-relaxed">
+            </p>`,
+        },
+        {
+            q: 'How do I report abuse?',
+            a: `<p class="text-slate-300 text-sm leading-relaxed">
                 To report an entry, contact
                 <a href="mailto:me@arda0.net" class="text-blue-400 hover:text-blue-300 transition-colors">me@arda0.net</a>.
-            </p>
-        </div>
-    </div>
-</main>
+            </p>`,
+        },
+    ];
+
+    const faqList = document.getElementById('faq-list');
+
+    // faqs is a fixed, hardcoded array above (not user input), so building the
+    // answer body via innerHTML here is safe.
+    faqs.forEach(f => {
+        const card = document.createElement('div');
+        card.className = 'glass-panel p-6 rounded-2xl shadow-2xl border border-slate-800 bg-slate-900/40 space-y-2';
+
+        const h3 = document.createElement('h3');
+        h3.className = 'text-[10px] font-bold text-blue-400 uppercase tracking-widest';
+        h3.textContent = f.q;
+
+        card.appendChild(h3);
+        card.insertAdjacentHTML('beforeend', f.a);
+        faqList.appendChild(card);
+    });
+</script>
 
 </html>
