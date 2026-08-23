@@ -8,11 +8,12 @@
     <meta property="og:title" content="guestbook">
     <meta property="og:description" content="i made this at 3am pls sign it means a lot to me :')">
     <meta property="og:site_name" content="guestbook">
-    <meta property="og:image" content="https://arda0.net/assets/xp.gif">
+    <meta property="og:image" content="https://arda0.net/assets/favicon">
     <meta property="og:url" content="https://arda0.net/guestbook/">
+    <link rel="icon" href="/assets/favicon">
 
     <title>guestbook</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://arda0.net/assets/tailwind.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .glass {
@@ -37,6 +38,10 @@
             guest<span class="text-blue-500">book</span>
         </h1>
     </div>
+    <a href="/guestbook/faq" target="_self"
+        class="text-xs font-bold text-slate-500 hover:text-blue-400 transition-colors tracking-[0.15em] uppercase px-3 py-1.5">
+        FAQ
+    </a>
 </header>
 
 <div class="max-w-2xl mx-auto px-4 mb-8">
@@ -44,14 +49,18 @@
 </div>
 
 <main class="flex flex-col gap-6 max-w-2xl mx-auto">
-    <h2 class="text-[10px] font-bold text-slate-500 tracking-[0.2em] px-2 uppercase">guestbook</h2>
-
     <div class="glass-panel p-6 rounded-xl border border-slate-800 bg-slate-900/40">
         <form id="guestbook-form" class="flex flex-col gap-4">
-            <input type="text" id="name-input" placeholder="your name" required
-                class="bg-slate-800/50 border border-slate-700 text-blue-100 text-xs rounded p-2 px-3 focus:outline-none focus:border-blue-500 transition">
-            <textarea id="message-input" placeholder="leave a message..." required
-                class="bg-slate-800/50 border border-slate-700 text-blue-100 text-xs rounded p-2 px-3 h-20 focus:outline-none focus:border-blue-500 transition"></textarea>
+            <div class="flex flex-col gap-1">
+                <input type="text" id="name-input" placeholder="your name" required maxlength="100"
+                    class="bg-slate-800/50 border border-slate-700 text-blue-100 text-xs rounded p-2 px-3 focus:outline-none focus:border-blue-500 transition">
+                <span id="name-counter" class="text-[9px] text-slate-600 font-mono self-end">100 characters left</span>
+            </div>
+            <div class="flex flex-col gap-1">
+                <textarea id="message-input" placeholder="leave a message..." required maxlength="500"
+                    class="bg-slate-800/50 border border-slate-700 text-blue-100 text-xs rounded p-2 px-3 h-20 focus:outline-none focus:border-blue-500 transition"></textarea>
+                <span id="message-counter" class="text-[9px] text-slate-600 font-mono self-end">500 characters left</span>
+            </div>
             <button type="submit"
                 class="bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold py-2 rounded uppercase tracking-wider transition">
                 sign guestbook
@@ -82,6 +91,20 @@
     // --- State & DOM ---
     const feed = document.getElementById('guestbook-feed');
     const form = document.getElementById('guestbook-form');
+    const nameInput = document.getElementById('name-input');
+    const messageInput = document.getElementById('message-input');
+    const nameCounter = document.getElementById('name-counter');
+    const messageCounter = document.getElementById('message-counter');
+
+    // --- Character Counters ---
+    function updateCounter(input, counter) {
+        const remaining = parseInt(input.maxLength) - input.value.length;
+        counter.textContent = `${remaining} characters left`;
+        counter.classList.toggle('text-red-400', remaining <= 0);
+        counter.classList.toggle('text-slate-600', remaining > 0);
+    }
+    nameInput.addEventListener('input', () => updateCounter(nameInput, nameCounter));
+    messageInput.addEventListener('input', () => updateCounter(messageInput, messageCounter));
 
     // --- Core Functions ---
     async function fetchEntries() {
@@ -99,22 +122,53 @@
     }
 
     function renderEntries(entries) {
-        feed.innerHTML = entries.map(entry => `
-            <div class="glass-panel p-6 rounded-xl border border-slate-800 bg-slate-900/20 transition-all hover:bg-slate-900/30">
-                <div class="flex justify-between items-center">
-                    <span class="text-blue-300 font-bold text-sm">${entry.name}</span>
-                    <span class="text-[9px] text-slate-500 font-mono">${new Date(entry.time + "Z").toLocaleString()}</span>
-                </div>
-                <p class="text-slate-400 text-xs mt-2 leading-relaxed whitespace-pre font-mono">${entry.message}</p>
-                <div class="mt-4 flex justify-end">
-                    <button onclick="starEntry(${entry.id}, this)" 
-                        class="flex items-center gap-1.5 text-slate-500 hover:text-yellow-400 transition-colors group">
-                        <span class="text-[10px] font-bold group-hover:scale-110 transition-transform">★</span>
-                        <span class="text-[10px] font-mono count">${entry.stars}</span>
-                    </button>
-                </div>
-            </div>
-        `).join('');
+        // Built with DOM APIs (not innerHTML + string interpolation) on purpose:
+        // entry.name/entry.message are submitted by any anonymous visitor via
+        // a public POST endpoint, and shown to every other visitor. textContent
+        // never parses its input as markup, so a crafted name/message cannot
+        // inject HTML/script here.
+        feed.replaceChildren(...entries.map(entry => {
+            const card = document.createElement('div');
+            card.className = 'glass-panel p-6 rounded-xl border border-slate-800 bg-slate-900/20 transition-all hover:bg-slate-900/30';
+
+            const topRow = document.createElement('div');
+            topRow.className = 'flex justify-between items-center';
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'text-blue-300 font-bold text-sm';
+            nameSpan.textContent = entry.name;
+
+            const dateSpan = document.createElement('span');
+            dateSpan.className = 'text-[9px] text-slate-500 font-mono';
+            dateSpan.textContent = new Date(entry.time + "Z").toLocaleString();
+
+            topRow.append(nameSpan, dateSpan);
+
+            const messagePara = document.createElement('p');
+            messagePara.className = 'text-slate-400 text-xs mt-2 leading-relaxed whitespace-pre font-mono';
+            messagePara.textContent = entry.message;
+
+            const starRow = document.createElement('div');
+            starRow.className = 'mt-4 flex justify-end';
+
+            const starBtn = document.createElement('button');
+            starBtn.className = 'flex items-center gap-1.5 text-slate-500 hover:text-yellow-400 transition-colors group';
+
+            const starIcon = document.createElement('span');
+            starIcon.className = 'text-[10px] font-bold group-hover:scale-110 transition-transform';
+            starIcon.textContent = '★';
+
+            const countSpan = document.createElement('span');
+            countSpan.className = 'text-[10px] font-mono count';
+            countSpan.textContent = entry.stars;
+
+            starBtn.append(starIcon, countSpan);
+            starBtn.addEventListener('click', () => starEntry(entry.id, starBtn));
+            starRow.appendChild(starBtn);
+
+            card.append(topRow, messagePara, starRow);
+            return card;
+        }));
     }
 
     async function starEntry(id, btn) {

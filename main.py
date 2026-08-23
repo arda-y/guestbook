@@ -15,6 +15,34 @@ from slowapi.util import get_remote_address
 import uvicorn
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
+
+def get_docker_gateway_ip() -> str | None:
+    """
+    Reads /proc/net/route to find the default gateway IP as seen from inside
+    this container. This is the Docker bridge gateway, which nginx (running on
+    the host) appears as when it reaches this container through Docker's
+    published-port path.
+
+    Docker can reassign this IP whenever the compose network is recreated
+    (e.g. after `docker compose down`), so we resolve it at each startup
+    instead of hardcoding a value that goes stale.
+    """
+    try:
+        with open("/proc/net/route", encoding="ascii") as f:
+            for line in f.readlines()[1:]:
+                fields = line.strip().split()
+                if len(fields) < 3:
+                    continue
+                if fields[1] == "00000000":  # destination 0.0.0.0 = default route
+                    gateway_int = int(fields[2], 16)
+                    # /proc/net/route stores the gateway in little-endian hex
+                    gateway_bytes = gateway_int.to_bytes(4, byteorder="little")
+                    return ".".join(str(b) for b in gateway_bytes)
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 # The 'sqlite+aiosqlite' driver is key for async SQLite
 DATABASE_URL = "sqlite+aiosqlite:///./mountpoint/guestbook.db"
 
@@ -45,7 +73,16 @@ async def lifespan(app: FastAPI): # ignore: unused-argument
 
 app = FastAPI(lifespan=lifespan)
 
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["127.0.0.1", "172.22.0.1"])
+# Trust 127.0.0.1 (direct/local runs) and the current Docker gateway (how nginx
+# actually appears when it reaches this container through the published port).
+# Resolved at startup instead of hardcoded - see get_docker_gateway_ip().
+_trusted_hosts = ["127.0.0.1"]
+_gateway_ip = get_docker_gateway_ip()
+if _gateway_ip:
+    _trusted_hosts.append(_gateway_ip)
+print(f"Trusted proxy hosts: {_trusted_hosts}", flush=True)
+
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=_trusted_hosts)
 
 mapper_registry = registry()
 Base = mapper_registry.generate_base()
@@ -113,8 +150,18 @@ async def edit_entry(
             if entry is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
             if name is not None:
+                if len(name.strip()) > NAME_MAX_LENGTH:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"name must be at most {NAME_MAX_LENGTH} characters",
+                    )
                 entry.name = name.strip()
             if message is not None:
+                if len(message.strip()) > MESSAGE_MAX_LENGTH:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"message must be at most {MESSAGE_MAX_LENGTH} characters",
+                    )
                 entry.message = message.strip()
             if stars is not None:
                 entry.stars = stars
@@ -126,10 +173,18 @@ async def edit_entry(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid action or missing parameters")
 
 
+NAME_MAX_LENGTH = 100
+MESSAGE_MAX_LENGTH = 500
+
+
 class Guestbook(Base):
     __tablename__ = "guestbook_entries"
 
     id = Column(Integer, primary_key=True, index=True)
+    # SQLite does not enforce String() length limits by itself - the
+    # NAME_MAX_LENGTH/MESSAGE_MAX_LENGTH checks below are what actually
+    # enforce these; these column sizes are documentation only unless you
+    # switch to a database that enforces VARCHAR length (e.g. Postgres/MySQL).
     name = Column(String(100), nullable=False)
     message = Column(String(500), nullable=False)
     time = Column(String(100), nullable=False)
@@ -139,6 +194,10 @@ class Guestbook(Base):
 async def root():
     return FileResponse("index.html", media_type="text/html")
 
+@app.get("/faq")
+async def faq():
+    return FileResponse("faq.html", media_type="text/html")
+
 @app.get("/root")
 @limiter.limit("5/minute")
 async def api_read_root(request: Request):
@@ -146,6 +205,17 @@ async def api_read_root(request: Request):
 
 
 async def post_entry(name: str, message: str):
+    if len(name.strip()) > NAME_MAX_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"name must be at most {NAME_MAX_LENGTH} characters",
+        )
+    if len(message.strip()) > MESSAGE_MAX_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"message must be at most {MESSAGE_MAX_LENGTH} characters",
+        )
+
     async with AsyncSessionLocal() as q:
         session: AsyncSession = q
 
