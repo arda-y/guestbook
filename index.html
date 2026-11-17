@@ -1,219 +1,118 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <meta property="og:title" content="guestbook">
-    <meta property="og:description" content="i made this at 3am pls sign it means a lot to me :')">
-    <meta property="og:site_name" content="guestbook">
-    <meta property="og:image" content="https://arda0.net/assets/favicon">
-    <meta property="og:url" content="https://arda0.net/guestbook/">
-    <link rel="icon" href="/assets/favicon">
-
-    <title>guestbook</title>
-    <script src="https://arda0.net/assets/tailwind.min.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        .glass {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-        }
-
-        body {
-            background: #0f172a;
-            color: #f8fafc;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="darkreader-lock">
+<meta property="og:title" content="guestbook">
+<meta property="og:description" content="i made this at 3am pls sign it means a lot to me :')">
+<meta property="og:site_name" content="guestbook">
+<meta property="og:image" content="https://arda0.net/assets/favicon">
+<meta property="og:url" content="https://arda0.net/guestbook/">
+<link rel="icon" href="/assets/favicon">
+<title>guestbook</title>
+<link rel="stylesheet" href="static/theme.css?v=7">
+<script src="static/theme.js?v=7"></script>
 </head>
-
-<header class="w-full max-w-2xl mx-auto px-4 py-8 flex justify-between items-end">
-    <div class="flex flex-col gap-1">
-        <a href="https://arda0.net" target="_self"
-            class="text-[10px] font-bold text-blue-400 hover:text-blue-300 transition-colors tracking-[0.2em] uppercase flex items-center gap-2">
-            <span>←</span> back to home
-        </a>
-        <h1 class="text-3xl font-black text-white tracking-tight">
-            guest<span class="text-blue-500">book</span>
-        </h1>
-    </div>
-    <a href="/guestbook/faq" target="_self"
-        class="text-xs font-bold text-slate-500 hover:text-blue-400 transition-colors tracking-[0.15em] uppercase px-3 py-1.5">
-        FAQ
-    </a>
-</header>
-
-<div class="max-w-2xl mx-auto px-4 mb-8">
-    <div class="h-[1px] w-full bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
-</div>
-
-<main class="flex flex-col gap-6 max-w-2xl mx-auto">
-    <div class="glass-panel p-6 rounded-xl border border-slate-800 bg-slate-900/40">
-        <form id="guestbook-form" class="flex flex-col gap-4">
-            <div class="flex flex-col gap-1">
-                <input type="text" id="name-input" placeholder="your name" required maxlength="100"
-                    class="bg-slate-800/50 border border-slate-700 text-blue-100 text-xs rounded p-2 px-3 focus:outline-none focus:border-blue-500 transition">
-                <span id="name-counter" class="text-[9px] text-slate-600 font-mono self-end">100 characters left</span>
-            </div>
-            <div class="flex flex-col gap-1">
-                <textarea id="message-input" placeholder="leave a message..." required maxlength="500"
-                    class="bg-slate-800/50 border border-slate-700 text-blue-100 text-xs rounded p-2 px-3 h-20 focus:outline-none focus:border-blue-500 transition"></textarea>
-                <span id="message-counter" class="text-[9px] text-slate-600 font-mono self-end">500 characters left</span>
-            </div>
-            <button type="submit"
-                class="bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold py-2 rounded uppercase tracking-wider transition">
-                sign guestbook
-            </button>
-        </form>
-    </div>
-
-    <div id="guestbook-feed" class="flex flex-col gap-4">
-    </div>
-
-    <div class="flex justify-between px-2">
-        <button id="prev-btn"
-            class="text-slate-500 text-[10px] font-bold uppercase tracking-widest disabled:opacity-30">← newer</button>
-        <button id="next-btn"
-            class="text-slate-500 text-[10px] font-bold uppercase tracking-widest disabled:opacity-30">older →</button>
-    </div>
+<body>
+<main>
+<div class="top"><a href="https://arda0.net/">&larr; home</a><nav><div class="theme" role="group" aria-label="colour mode"><button type="button" data-mode="auto" aria-pressed="true">auto</button><button type="button" data-mode="light" aria-pressed="false">light</button><button type="button" data-mode="dark" aria-pressed="false">dark</button></div></nav></div>
+<div class="titlerow"><h1>guestbook</h1><a href="/guestbook/faq">faq</a></div>
+<p class="sub">leave a note, say hi.</p>
+<form id="form">
+<input id="name" type="text" placeholder="your name" required maxlength="100" autocomplete="nickname">
+<span id="nc" class="cnt"></span>
+<textarea id="msg" placeholder="leave a message..." required maxlength="500" rows="4"></textarea>
+<span id="mc" class="cnt"></span>
+<button type="submit">sign</button>
+</form>
+<p id="status" class="status" role="status" aria-live="polite"></p>
+<div id="feed"></div>
+<div class="pager"><button id="prev" type="button">&larr; newer</button><span id="page"></span><button id="next" type="button">older &rarr;</button></div>
 </main>
-
 <script>
-    // --- Configuration ---
-    const CONFIG = {
-        API_BASE: "https://arda0.net/guestbook/",
-        PAGE_LIMIT: 10
-    };
+(function () {
+  var LIMIT = 10, idx = 0;
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+  function say(text) { $('status').textContent = text; }
 
-    let currentIndex = 0;
-
-    // --- State & DOM ---
-    const feed = document.getElementById('guestbook-feed');
-    const form = document.getElementById('guestbook-form');
-    const nameInput = document.getElementById('name-input');
-    const messageInput = document.getElementById('message-input');
-    const nameCounter = document.getElementById('name-counter');
-    const messageCounter = document.getElementById('message-counter');
-
-    // --- Character Counters ---
-    function updateCounter(input, counter) {
-        const remaining = parseInt(input.maxLength) - input.value.length;
-        counter.textContent = `${remaining} characters left`;
-        counter.classList.toggle('text-red-400', remaining <= 0);
-        counter.classList.toggle('text-slate-600', remaining > 0);
+  // Entries are built with DOM APIs (textContent), never innerHTML: names and
+  // messages come from anonymous visitors and are shown to everyone else.
+  function mk(e) {
+    var a = el('article', 'entry'), h = el('header');
+    var d = new Date(e.time + 'Z');
+    h.append(el('span', 'n', e.name), el('span', 'd', isNaN(d) ? '' : d.toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'})));
+    var b = el('button', 'heart'), count = el('span', 'count', String(e.stars));
+    b.type = 'button';
+    b.append(document.createTextNode('\u2665 '), count);
+    function mark() {
+      b.classList.add('on'); b.disabled = true;
+      b.title = 'you liked this. you can like it again after a week.';
     }
-    nameInput.addEventListener('input', () => updateCounter(nameInput, nameCounter));
-    messageInput.addEventListener('input', () => updateCounter(messageInput, messageCounter));
-
-    // --- Core Functions ---
-    async function fetchEntries() {
-        try {
-            const res = await fetch(`${CONFIG.API_BASE}/get/entry?index=${currentIndex}&limit=${CONFIG.PAGE_LIMIT}`);
-            const data = await res.json();
-            renderEntries(data);
-
-            // Toggle pagination buttons
-            document.getElementById('prev-btn').disabled = currentIndex === 0;
-            document.getElementById('next-btn').disabled = data.length < CONFIG.PAGE_LIMIT;
-        } catch (err) {
-            alert("Failed to load entries. Rate limited?");
-        }
-    }
-
-    function renderEntries(entries) {
-        // Built with DOM APIs (not innerHTML + string interpolation) on purpose:
-        // entry.name/entry.message are submitted by any anonymous visitor via
-        // a public POST endpoint, and shown to every other visitor. textContent
-        // never parses its input as markup, so a crafted name/message cannot
-        // inject HTML/script here.
-        feed.replaceChildren(...entries.map(entry => {
-            const card = document.createElement('div');
-            card.className = 'glass-panel p-6 rounded-xl border border-slate-800 bg-slate-900/20 transition-all hover:bg-slate-900/30';
-
-            const topRow = document.createElement('div');
-            topRow.className = 'flex justify-between items-center';
-
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'text-blue-300 font-bold text-sm';
-            nameSpan.textContent = entry.name;
-
-            const dateSpan = document.createElement('span');
-            dateSpan.className = 'text-[9px] text-slate-500 font-mono';
-            dateSpan.textContent = new Date(entry.time + "Z").toLocaleString();
-
-            topRow.append(nameSpan, dateSpan);
-
-            const messagePara = document.createElement('p');
-            messagePara.className = 'text-slate-400 text-xs mt-2 leading-relaxed whitespace-pre font-mono';
-            messagePara.textContent = entry.message;
-
-            const starRow = document.createElement('div');
-            starRow.className = 'mt-4 flex justify-end';
-
-            const starBtn = document.createElement('button');
-            starBtn.className = 'flex items-center gap-1.5 text-slate-500 hover:text-yellow-400 transition-colors group';
-
-            const starIcon = document.createElement('span');
-            starIcon.className = 'text-[10px] font-bold group-hover:scale-110 transition-transform';
-            starIcon.textContent = '★';
-
-            const countSpan = document.createElement('span');
-            countSpan.className = 'text-[10px] font-mono count';
-            countSpan.textContent = entry.stars;
-
-            starBtn.append(starIcon, countSpan);
-            starBtn.addEventListener('click', () => starEntry(entry.id, starBtn));
-            starRow.appendChild(starBtn);
-
-            card.append(topRow, messagePara, starRow);
-            return card;
-        }));
-    }
-
-    async function starEntry(id, btn) {
-        const countSpan = btn.querySelector('.count');
-        const currentCount = parseInt(countSpan.innerText);
-
-        try {
-            // Optimistic UI update
-            countSpan.innerText = currentCount + 1;
-            btn.classList.add('text-yellow-400');
-
-            const res = await fetch(`${CONFIG.API_BASE}/post/star?entry_id=${id}`, { method: 'POST' });
-            if (!res.ok) throw new Error();
-        } catch (err) {
-            // Revert on failure
-            countSpan.innerText = currentCount;
-            btn.classList.remove('text-yellow-400');
-            alert("Action failed. You might be rate-limited!");
-        }
-    }
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const name = document.getElementById('name-input').value;
-        const message = document.getElementById('message-input').value;
-
-        try {
-            const res = await fetch(`${CONFIG.API_BASE}/post/entry?name=${encodeURIComponent(name)}&message=${encodeURIComponent(message)}`, {
-                method: 'POST'
-            });
-
-            if (res.ok) {
-                window.location.reload(); // Refresh as requested
-            } else {
-                throw new Error();
-            }
-        } catch (err) {
-            alert("Could not post message. Please wait a bit before trying again.");
-        }
+    if (e.liked) mark();
+    b.addEventListener('click', function () {
+      count.textContent = String(parseInt(count.textContent, 10) + 1);
+      mark();
+      fetch('post/star?entry_id=' + e.id, {method: 'POST'}).then(function (r) {
+        if (r.ok) return r.json().then(function (j) { count.textContent = String(j.stars); });
+        if (r.status === 409) { count.textContent = String(e.stars); say('you already liked that one this week.'); return; }
+        throw 0;
+      }).catch(function () {
+        count.textContent = String(e.stars); b.classList.remove('on'); b.disabled = false;
+        say('could not like that. try again in a bit.');
+      });
     });
+    var f = el('div', 'foot');
+    f.append(b, el('span', 'eid', '#' + e.id));
+    a.append(h, el('p', '', e.message), f);
+    return a;
+  }
 
-    // Pagination Listeners
-    document.getElementById('next-btn').onclick = () => { currentIndex += CONFIG.PAGE_LIMIT; fetchEntries(); };
-    document.getElementById('prev-btn').onclick = () => { currentIndex = Math.max(0, currentIndex - CONFIG.PAGE_LIMIT); fetchEntries(); };
+  function load() {
+    fetch('get/entry?index=' + idx + '&limit=' + LIMIT)
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (data) {
+        $('feed').replaceChildren.apply($('feed'), data.map(mk));
+        $('prev').disabled = idx === 0;
+        $('next').disabled = data.length < LIMIT;
+        $('page').textContent = 'page ' + (idx / LIMIT + 1);
+      })
+      .catch(function () { say('could not load entries. you may be rate limited, try again in a minute.'); });
+  }
+  $('next').onclick = function () { idx += LIMIT; load(); };
+  $('prev').onclick = function () { idx = Math.max(0, idx - LIMIT); load(); };
 
-    // Init
-    fetchEntries();
+  function counter(input, out) {
+    var left = input.maxLength - input.value.length;
+    out.textContent = left + ' characters left';
+    out.classList.toggle('over', left <= 0);
+  }
+  var name = $('name'), msg = $('msg');
+  name.addEventListener('input', function () { counter(name, $('nc')); });
+  msg.addEventListener('input', function () { counter(msg, $('mc')); });
+  counter(name, $('nc')); counter(msg, $('mc'));
+
+  $('form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    fetch('post/entry?name=' + encodeURIComponent(name.value) + '&message=' + encodeURIComponent(msg.value), {method: 'POST'})
+      .then(function (r) {
+        if (!r.ok) throw r.status;
+        name.value = ''; msg.value = ''; counter(name, $('nc')); counter(msg, $('mc'));
+        say('signed. thank you!');
+        idx = 0; load();
+      })
+      .catch(function (s) { say(s === 429 ? 'you can sign twice a day. try again tomorrow.' : 'could not post your message. try again in a bit.'); });
+  });
+
+  load();
+})();
 </script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+@font-face { font-family:'Lato'; font-style:normal; font-weight:400; font-display:swap; src:url(/assets/fonts/lato-latin-400-normal.woff2) format('woff2'); unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'Lato'; font-style:normal; font-weight:400; font-display:swap; src:url(/assets/fonts/lato-latin-ext-400-normal.woff2) format('woff2'); unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:'Lato'; font-style:normal; font-weight:700; font-display:swap; src:url(/assets/fonts/lato-latin-700-normal.woff2) format('woff2'); unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'Lato'; font-style:normal; font-weight:700; font-display:swap; src:url(/assets/fonts/lato-latin-ext-700-normal.woff2) format('woff2'); unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:'Lato'; font-style:italic; font-weight:400; font-display:swap; src:url(/assets/fonts/lato-latin-400-italic.woff2) format('woff2'); unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'Lato'; font-style:italic; font-weight:400; font-display:swap; src:url(/assets/fonts/lato-latin-ext-400-italic.woff2) format('woff2'); unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+
+/* ---------------------------------------------------------------- palette
+   Light is the default. Dark applies when <html data-theme="dark"> (set by theme.js).
+   To change the dark colours, edit only the second block. */
+:root {
+  --bg:#f4efe6; --card:#fffdf8; --field:#ffffff; --ink:#2b2622; --mute:#7d736a; --line:#ddd3c4;
+  --acc:#b5502d; --on-acc:#ffffff; --heart:#c8374f; --over:#c0392b;
+}
+:root[data-theme="dark"] {
+  --bg:#181a1b; --card:#1e2123; --field:#1b1d1e; --ink:#e8e6e3; --mute:#a39e95; --line:#363b3d;
+  --acc:#e0794f; --on-acc:#181a1b; --heart:#ee6a82; --over:#ff7b6b;
+}
+
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 Lato, system-ui, sans-serif; }
+main { max-width:38rem; margin:0 auto; padding:1.5rem 1rem 3rem; }
+a { color:var(--acc); }
+.top { display:flex; justify-content:space-between; align-items:center; gap:1rem; font-size:13px; }
+.top nav { display:flex; gap:1rem; align-items:center; }
+h1 { margin:1.2rem 0 .1rem; font-size:2.4rem; font-weight:700; letter-spacing:-.01em; }
+.titlerow { display:flex; justify-content:space-between; align-items:baseline; gap:1rem; font-size:13px; }
+.sub { margin:0 0 1.4rem; color:var(--mute); font-style:italic; }
+
+.theme { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
+.theme button { background:none; border:0; color:var(--mute); font:inherit; font-size:12px; padding:.3rem .65rem; cursor:pointer; min-height:1.9rem; }
+.theme button[aria-pressed="true"] { background:var(--acc); color:var(--on-acc); }
+
+form, .entry, .qa { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:1rem 1.1rem; }
+form { display:grid; gap:.3rem; margin-bottom:.6rem; }
+input, textarea { font:inherit; font-size:15px; padding:.55rem .7rem; border:1px solid var(--line); border-radius:4px; background:var(--field); color:var(--ink); width:100%; }
+input:focus, textarea:focus { outline:2px solid var(--acc); outline-offset:-1px; }
+.cnt { justify-self:end; font-size:11px; color:var(--mute); } .cnt.over { color:var(--over); }
+form button { justify-self:start; margin-top:.3rem; font:700 14px Lato, system-ui, sans-serif; padding:.6rem 1.2rem; background:var(--acc); color:var(--on-acc); border:0; border-radius:4px; cursor:pointer; min-height:2.6rem; }
+.status { min-height:1.4rem; margin:0 0 .9rem; font-size:13px; color:var(--mute); }
+
+#feed { display:grid; gap:.9rem; }
+.entry header { display:flex; justify-content:space-between; gap:.8rem; align-items:baseline; }
+.entry .n { font-weight:700; overflow-wrap:anywhere; }
+.entry .d { font-size:12px; color:var(--mute); white-space:nowrap; }
+.entry p { margin:.5rem 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.foot { display:flex; justify-content:space-between; align-items:center; }
+.eid { color:var(--mute); font-size:12px; opacity:.75; }
+.heart { background:none; border:0; padding:.3rem .2rem; font:inherit; font-size:13px; color:var(--mute); cursor:pointer; min-height:2rem; }
+.heart:hover:not(:disabled) { color:var(--heart); }
+.heart.on { color:var(--heart); }
+.heart:disabled { cursor:default; }
+
+.pager { display:flex; justify-content:space-between; align-items:center; margin-top:1.4rem; font-size:13px; color:var(--mute); }
+.pager button { background:none; border:0; color:var(--acc); font:inherit; cursor:pointer; padding:.6rem .2rem; }
+.pager button:disabled { color:var(--line); cursor:default; }
+
+.qa { margin-bottom:.9rem; }
+.qa h2 { margin:0 0 .4rem; font-size:1rem; }
+.qa p { margin:.4rem 0; }
+
+/* The colours fade by animating the palette variables themselves, so every element follows the
+   same value at the same time. theme.js sets .theme-fade for a moment after the visitor changes
+   the mode, so the first paint and hover effects are not slowed down. Browsers without @property
+   support (before Chrome 85, Safari 16.4, Firefox 128) switch instantly. The fade also runs with
+   "reduce motion" on: it moves nothing, and an abrupt flash between light and dark is the harder
+   thing on the eyes. */
+@property --bg { syntax:'<color>'; inherits:true; initial-value:transparent; }
+@property --card { syntax:'<color>'; inherits:true; initial-value:transparent; }
+@property --field { syntax:'<color>'; inherits:true; initial-value:transparent; }
+@property --ink { syntax:'<color>'; inherits:true; initial-value:transparent; }
+@property --mute { syntax:'<color>'; inherits:true; initial-value:transparent; }
+@property --line { syntax:'<color>'; inherits:true; initial-value:transparent; }
+@property --acc { syntax:'<color>'; inherits:true; initial-value:transparent; }
+@property --on-acc { syntax:'<color>'; inherits:true; initial-value:transparent; }
+@property --heart { syntax:'<color>'; inherits:true; initial-value:transparent; }
+@property --over { syntax:'<color>'; inherits:true; initial-value:transparent; }
+:root.theme-fade { transition: --bg .3s ease, --card .3s ease, --field .3s ease, --ink .3s ease, --mute .3s ease, --line .3s ease, --acc .3s ease, --on-acc .3s ease, --heart .3s ease, --over .3s ease; }

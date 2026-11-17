@@ -1,14 +1,17 @@
 from contextlib import asynccontextmanager
 import datetime
+import ipaddress
 import time
 import secrets
 
 from fastapi import status
 from fastapi.params import Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, registry
-from sqlalchemy import Column, Integer, String, select
+from sqlalchemy import Column, Integer, String, UniqueConstraint, delete, func, select, update
 from fastapi import FastAPI, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -176,6 +179,25 @@ async def edit_entry(
 NAME_MAX_LENGTH = 100
 MESSAGE_MAX_LENGTH = 500
 
+# One like per entry per IP address per week.
+LIKE_COOLDOWN = 7 * 24 * 60 * 60
+# At most 2 new entries per IP address per day. Both kinds of record are deleted after a week.
+POSTS_PER_DAY = 2
+DAY_SECONDS = 24 * 60 * 60
+RECORD_LIFETIME = 7 * 24 * 60 * 60
+
+
+def ip_key(ip: str) -> str:
+    """The client IP as stored with a like. IPv6 clients are grouped by /64, since one
+    home connection controls a whole /64."""
+    try:
+        addr = ipaddress.ip_address(ip)
+        if addr.version == 6:
+            return str(ipaddress.ip_network(f"{ip}/64", strict=False).network_address)
+    except ValueError:
+        pass
+    return ip
+
 
 class Guestbook(Base):
     __tablename__ = "guestbook_entries"
@@ -189,6 +211,46 @@ class Guestbook(Base):
     message = Column(String(500), nullable=False)
     time = Column(String(100), nullable=False)
     stars = Column(Integer, nullable=False)
+
+
+class EntryLike(Base):
+    """One row per (entry, IP) while that IP's weekly like is in force. Rows are deleted after a week."""
+    __tablename__ = "entry_likes"
+    __table_args__ = (UniqueConstraint("entry_id", "ip"),)
+
+    id = Column(Integer, primary_key=True)
+    entry_id = Column(Integer, nullable=False, index=True)
+    ip = Column(String(45), nullable=False, index=True)
+    liked_at = Column(Integer, nullable=False)
+
+
+class PostRecord(Base):
+    """One row per new entry: which IP sent it and when. It is only used to enforce the daily
+    limit, and is never linked to the entry itself. Rows are deleted after a week."""
+    __tablename__ = "post_records"
+
+    id = Column(Integer, primary_key=True)
+    ip = Column(String(45), nullable=False, index=True)
+    posted_at = Column(Integer, nullable=False, index=True)
+
+
+async def purge_old_records(session: AsyncSession, now: int):
+    """Forget IP addresses that are older than a week."""
+    await session.execute(delete(EntryLike).where(EntryLike.liked_at <= now - RECORD_LIFETIME))
+    await session.execute(delete(PostRecord).where(PostRecord.posted_at <= now - RECORD_LIFETIME))
+
+
+class RevalidatingStatic(StaticFiles):
+    """Static files that the browser re-checks on every visit (cheap, they answer 304 when unchanged),
+    so a change to the colours or the script shows up without a hard refresh."""
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/static", RevalidatingStatic(directory="static"), name="static")
+
 
 @app.get("/")
 async def root():
@@ -204,7 +266,7 @@ async def api_read_root(request: Request):
     return request.client.host
 
 
-async def post_entry(name: str, message: str):
+async def post_entry(name: str, message: str, ip: str):
     if len(name.strip()) > NAME_MAX_LENGTH:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -216,8 +278,22 @@ async def post_entry(name: str, message: str):
             detail=f"message must be at most {MESSAGE_MAX_LENGTH} characters",
         )
 
+    now = int(time.time())
     async with AsyncSessionLocal() as q:
         session: AsyncSession = q
+
+        await purge_old_records(session, now)
+        sent = await session.execute(
+            select(func.count()).select_from(PostRecord).where(
+                PostRecord.ip == ip_key(ip), PostRecord.posted_at > now - DAY_SECONDS
+            )
+        )
+        if sent.scalar_one() >= POSTS_PER_DAY:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"You can send {POSTS_PER_DAY} entries per day. Try again tomorrow.",
+            )
+        session.add(PostRecord(ip=ip_key(ip), posted_at=now))
 
         new_entry = Guestbook(
             name=name.strip(),
@@ -232,20 +308,35 @@ async def post_entry(name: str, message: str):
 
 
 @app.post("/post/entry")
-@limiter.limit("2/day")
 async def api_post_entry(request: Request, name: str, message: str):
-    return await post_entry(name, message)
+    return await post_entry(name, message, request.client.host)
 
 
-async def get_entries(index: int = 0, limit: int = 10):
+async def get_entries(ip: str, index: int = 0, limit: int = 10):
     async with AsyncSessionLocal() as q:
         session: AsyncSession = q
 
         # get 10 newest entries starting from index
         statement = select(Guestbook).order_by(Guestbook.id.desc()).offset(index).limit(limit)
-        result = await session.execute(statement)
+        entries = (await session.execute(statement)).scalars().all()
 
-        return result.scalars().all()
+        # which of these entries this IP address has already liked this week
+        liked_ids = set()
+        if entries:
+            liked = await session.execute(
+                select(EntryLike.entry_id).where(
+                    EntryLike.ip == ip_key(ip),
+                    EntryLike.liked_at > int(time.time()) - LIKE_COOLDOWN,
+                    EntryLike.entry_id.in_([e.id for e in entries]),
+                )
+            )
+            liked_ids = set(liked.scalars().all())
+
+        return [
+            {"id": e.id, "name": e.name, "message": e.message, "time": e.time, "stars": e.stars,
+             "liked": e.id in liked_ids}
+            for e in entries
+        ]
 
 
 @app.get("/get/entry")
@@ -253,10 +344,13 @@ async def get_entries(index: int = 0, limit: int = 10):
 async def api_get_entries(request: Request, index: int = 0, limit: int = 10):
     if limit != 10:
         return {"message": "stop snooping around!!!"}
-    return await get_entries(index=index, limit=limit)
+    # "liked" depends on who asks, so no cache may keep this answer
+    return JSONResponse(await get_entries(request.client.host, index=index, limit=limit),
+                        headers={"Cache-Control": "private, no-store"})
 
 
-async def add_star(entry_id: int):
+async def add_star(entry_id: int, ip: str):
+    now = int(time.time())
     async with AsyncSessionLocal() as q:
         session: AsyncSession = q
 
@@ -265,18 +359,33 @@ async def add_star(entry_id: int):
         entry = result.scalar_one_or_none()
 
         if entry is None:
-            return {"message": "Entry not found"}
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found")
 
-        entry.stars += 1
+        # forget likes older than a week, then record this one. The unique
+        # (entry, ip) key rejects a second like while the first is still in force,
+        # even if two requests arrive at the same moment.
+        await purge_old_records(session, now)
+        await session.execute(delete(EntryLike).where(EntryLike.liked_at <= now - LIKE_COOLDOWN))
+        session.add(EntryLike(entry_id=entry_id, ip=ip_key(ip), liked_at=now))
+        try:
+            await session.flush()
+        except IntegrityError:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="You already liked this entry. You can like it again after a week.",
+            ) from None
+
+        await session.execute(update(Guestbook).where(Guestbook.id == entry_id).values(stars=Guestbook.stars + 1))
         await session.commit()
         await session.refresh(entry)
-        return {"message": "Star added", "entry": entry}
+        return {"message": "Liked", "stars": entry.stars}
 
 
 @app.post("/post/star")
-@limiter.limit("3/day")
+@limiter.limit("60/minute")
 async def api_add_star(request: Request, entry_id: int):
-    return await add_star(entry_id)
+    return await add_star(entry_id, request.client.host)
 
 
 if __name__ == "__main__":
